@@ -218,51 +218,200 @@
          (hermes-test--emit-dashboard-idle client)
          (should (equal submits '("cite files" "first"))))))))
 
-(ert-deftest hermes-chat-commands-catalog-rendering ()
+(defconst hermes-test--slash-command-catalog
+  '((categories
+     . (((name . "Session")
+         (pairs . (("/queue" "Queue next message")
+                   ("/steer" "Steer active run"))))))
+    (sub . (("goal" . ("status" "pause"))
+            ("config" . ("get" "set"))))
+    (warning . "skill discovery unavailable"))
+  "Slash command catalog used by the `hermes-chat-show-commands' tests.")
+
+(defun hermes-test--stub-command-catalog (catalog state)
+  "Stub `commands.catalog' with CATALOG, recording the request in STATE.
+STATE is a plist whose :requested flag and :resolve callback describe the
+last request."
+  (lambda (_client &rest args)
+    (setq state (plist-put state :requested t))
+    (plist-put state :resolve (plist-get args :resolve))
+    (funcall (plist-get args :resolve) catalog)))
+
+(ert-deftest hermes-chat-commands-read-in-minibuffer-with-annotations ()
+  "The catalog is read in the minibuffer, annotated, and inserted."
   (let ((client (hermes-test--dashboard-client))
-        catalog-requested
-        (catalog '((categories
-                    . (((name . "Session")
-                        (pairs . (("/queue" "Queue next message")
-                                  ("/steer" "Steer active run"))))))
-                   (sub . (("goal" . ("status" "pause" "resume"))
-                           ("config" . ("get" "set"))))
-                   (warning . "skill discovery unavailable"))))
+        (catalog hermes-test--slash-command-catalog)
+        requested prompt table)
     (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
                (lambda (&rest _args) client))
               ((symbol-function 'hermes-dashboard-transport-commands-catalog)
                (lambda (_client &rest args)
-                 (setq catalog-requested t)
-                 (funcall (plist-get args :resolve) catalog))))
+                 (setq requested t)
+                 (funcall (plist-get args :resolve) catalog)))
+              ((symbol-function 'completing-read)
+               (lambda (p collection &rest _args)
+                 (setq prompt p table collection)
+                 "/queue")))
       (hermes-test-with-chat-buffer
        (let ((entries (length (hermes-chat--entries))))
          (insert "/commands")
          (hermes-chat-send)
-         (should catalog-requested)
+         (should requested)
+         (should (equal prompt "Hermes command: "))
+         (let* ((metadata (completion-metadata "" table nil))
+                (annotate (completion-metadata-get metadata 'annotation-function)))
+           ;; Subcommands follow their parent, in catalogue order.
+           (should (equal (all-completions "" table)
+                          '("/queue" "/steer" "/goal status" "/goal pause"
+                            "/config get" "/config set")))
+           (should (eq (completion-metadata-get metadata 'display-sort-function)
+                       #'identity))
+           (let ((annotation (funcall annotate "/queue")))
+             (should (equal (substring-no-properties annotation)
+                            "  Queue next message"))
+             (should (eq (get-text-property 2 'face annotation) 'shadow)))
+           ;; A subcommand names its parent when the parent has no description.
+           (should (equal (substring-no-properties (funcall annotate "/goal status"))
+                          "  subcommand of /goal")))
+         ;; The command lands in the composer, never in the transcript.
+         (should (equal (hermes-chat-input-string) "/queue "))
          (should-not (cl-some (lambda (entry)
                                 (string-match-p "Queue next message"
                                                 (or (plist-get entry :content) "")))
                               (hermes-chat--entries)))
-         (should (<= (length (hermes-chat--entries)) (1+ entries))))
-       (let ((view (hermes-buffer--find "*Hermes Commands*" 'hermes-chat-commands-mode)))
+         (should (<= (length (hermes-chat--entries)) (1+ entries))))))))
+
+(ert-deftest hermes-chat-commands-draft-is-never-edited ()
+  "A draft keeps the composed text; the chosen command goes to the kill ring."
+  (let ((client (hermes-test--dashboard-client))
+        (catalog hermes-test--slash-command-catalog))
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (lambda (_client &rest args)
+                 (funcall (plist-get args :resolve) catalog)))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args) "/steer keep going")))
+      (hermes-test-with-chat-buffer
+       (insert "draft")
+       (hermes-chat-show-commands)
+       (should (equal (hermes-chat-input-string) "draft"))
+       (should (equal (current-kill 0) "/steer keep going"))))))
+
+(ert-deftest hermes-chat-commands-empty-choice-inserts-nothing ()
+  "RET on blank input leaves the composer alone."
+  (let ((client (hermes-test--dashboard-client))
+        (catalog hermes-test--slash-command-catalog))
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (lambda (_client &rest args)
+                 (funcall (plist-get args :resolve) catalog)))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args) "   ")))
+      (hermes-test-with-chat-buffer
+       (hermes-chat-show-commands)
+       (should (equal (hermes-chat-input-string) ""))))))
+
+(ert-deftest hermes-chat-commands-empty-catalog-shows-listing ()
+  "A catalog without commands falls back to the browsable listing."
+  (let ((client (hermes-test--dashboard-client))
+        (catalog '((pairs . ()) (warning . "skill discovery unavailable"))))
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (lambda (_client &rest args)
+                 (funcall (plist-get args :resolve) catalog)))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args) (ert-fail "Empty catalog must not prompt"))))
+      (hermes-test-with-chat-buffer
+       (hermes-chat-show-commands)
+       (let ((view (hermes-buffer--find "*Hermes Commands*"
+                                        'hermes-chat-commands-mode)))
          (unwind-protect
              (with-current-buffer view
-               (let ((text (buffer-string)))
-                 (should (derived-mode-p 'special-mode))
-                 (should (string-match-p "^Session$" text))
-                 (should (string-match-p "/queue +Queue next message" text))
-                 (should (string-match-p "/steer +Steer active run" text))
-                 (should (string-match-p "skill discovery unavailable" text))
-                 (should (string-match-p "Subcommands" text))
-                 (should (string-match-p "/goal status, pause, resume" text))
-                 (should (string-match-p "/config get, set" text)))
-               (goto-char (point-min))
-               (search-forward "/queue")
-               (should (eq (get-text-property (1- (point)) 'face)
-                           'font-lock-function-name-face))
-               (search-forward "Queue next")
-               (should-not (get-text-property (1- (point)) 'face)))
+               (should (derived-mode-p 'special-mode))
+               (should (string-match-p "skill discovery unavailable"
+                                       (buffer-string))))
            (kill-buffer view)))))))
+
+(ert-deftest hermes-chat-commands-retired-chat-never-inserts ()
+  "A catalog that lands after the chat's lifetime is dropped unprompted."
+  (let ((client (hermes-test--dashboard-client))
+        (catalog hermes-test--slash-command-catalog)
+        resolve prompted)
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (lambda (_client &rest args)
+                 (setq resolve (plist-get args :resolve))))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args) (setq prompted t) "/queue")))
+      (hermes-test-with-chat-buffer
+       (hermes-chat-show-commands)
+       (should resolve)
+       (setq hermes-chat--lifecycle-generation
+             (hermes-chat--next-lifetime-token))
+       (funcall resolve catalog)
+       (should-not prompted)
+       (should (equal (hermes-chat-input-string) ""))))))
+
+(ert-deftest hermes-chat-slash-key-opens-menu-in-empty-composer ()
+  "A slash at the start of the composer reads a command in the minibuffer."
+  (let ((client (hermes-test--dashboard-client))
+        (state (list :requested nil))
+        (seen nil))
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (hermes-test--stub-command-catalog
+                hermes-test--slash-command-catalog state))
+              ((symbol-function 'completing-read)
+               (lambda (prompt collection &rest _args)
+                 (setq seen (list prompt collection))
+                 "/queue")))
+      (hermes-test-with-chat-buffer
+       (goto-char (point-max))
+       (execute-kbd-macro (kbd "/"))
+       (should (plist-get state :requested))
+       (should (equal (car seen) "Hermes command: "))
+       (should (equal (hermes-chat-input-string) "/queue "))))))
+
+(ert-deftest hermes-chat-slash-key-stays-literal-with-a-draft ()
+  "A slash with composer text never prompts: it inserts the character."
+  (let ((client (hermes-test--dashboard-client))
+        (state (list :requested nil))
+        prompted)
+    (cl-letf (((symbol-function 'hermes-dashboard-transport-start)
+               (lambda (&rest _args) client))
+              ((symbol-function 'hermes-dashboard-transport-commands-catalog)
+               (hermes-test--stub-command-catalog
+                hermes-test--slash-command-catalog state))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args) (setq prompted t) "/queue")))
+      (hermes-test-with-chat-buffer
+       (goto-char (point-max))
+       (insert "http:")
+       (should (eq (keymap-lookup hermes-chat-mode-map "/")
+                   #'self-insert-command))
+       (execute-kbd-macro (kbd "/"))
+       (should-not prompted)
+       (should-not (plist-get state :requested))
+       (should (equal (hermes-chat-input-string) "http:/"))))))
+
+(ert-deftest hermes-chat-slash-key-opens-from-empty-chat-transcript ()
+  "A slash away from an empty composer still opens the command menu."
+  (hermes-test-with-chat-buffer
+   (insert "transcript line\n")
+   (set-marker hermes-chat--input-marker (point-max))
+   (goto-char (point-min))
+   (should (hermes-chat--composer-empty-p))
+   (should (eq (keymap-lookup hermes-chat-mode-map "/")
+               #'hermes-chat-show-commands))))
+
+(ert-deftest hermes-chat-mode-map-drops-command-shortcut ()
+  "The command menu no longer has a C-c C-/ shortcut."
+  (should-not (keymap-lookup hermes-chat-mode-map "C-c C-/")))
 
 (ert-deftest hermes-chat-commands-view-inserts-into-owning-composer ()
   "RET in the commands view inserts into its own chat, never another."

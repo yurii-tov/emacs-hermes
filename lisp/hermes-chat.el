@@ -1194,9 +1194,9 @@ Return non-nil when the transport request starts."
       (hermes-chat--queue-image-draft)
     (let ((content (string-trim (or message (hermes-chat-input-string)))))
       (when (string-empty-p content)
-	(user-error "No Hermes input to queue"))
+        (user-error "No Hermes input to queue"))
       (unless message
-	(hermes-chat--delete-input-tail))
+        (hermes-chat--delete-input-tail))
       (hermes-chat--dashboard-queue-or-submit content (current-buffer)))))
 
 (defun hermes-chat--steer-rejected (content message)
@@ -1919,7 +1919,7 @@ or deletes the child already persisted by the backend."
                          (and (eq claim hermes-buffer--owner)
                               (hermes-buffer--owned-p 'hermes-chat-mode)
                               (eql lifetime hermes-chat--lifecycle-generation)))))
-		(check-current ()
+                (check-current ()
                   (unless (and (child-current-p) (buffer-live-p parent)
                                (with-current-buffer parent (funcall current-p)))
                     (error "Branch view was replaced during adoption"))))
@@ -1935,8 +1935,8 @@ or deletes the child already persisted by the backend."
               (unless (and (with-current-buffer parent (funcall current-p))
                            (eq client (hermes-chat--dashboard-start
                                        (hermes-chat--transport-callback
-					child nil t (hermes-chat--next-transport-generation)))))
-		(error "Branch connection was replaced"))
+                                        child nil t (hermes-chat--next-transport-generation)))))
+                (error "Branch connection was replaced"))
               (check-current)
               (hermes-chat--render-history (hermes-transport--get result 'messages))
               (check-current)
@@ -3154,7 +3154,7 @@ history read, including with empty input when a queued message is retained."
           (clarify-key (hermes-chat--pending-clarify-key))
           sent-p)
       (when (string-empty-p content)
-	(user-error "No Hermes input to send"))
+        (user-error "No Hermes input to send"))
       (setq sent-p
             (cond
              (clarify-key
@@ -3172,7 +3172,7 @@ history read, including with empty input when a queued message is retained."
                    (hermes-chat--dashboard-session-attached-p)
                    (null hermes-chat--queued-messages))
               (when hermes-chat--busy-submit-context
-		(user-error "Hermes is accepting the previous message"))
+                (user-error "Hermes is accepting the previous message"))
               (hermes-chat--delete-input-tail)
               (hermes-chat--submit-busy-dashboard-content content))
              ((or (hermes-chat--active-turn-p) hermes-chat--queued-messages)
@@ -3184,7 +3184,7 @@ history read, including with empty input when a queued message is retained."
               (hermes-chat--delete-input-tail)
               (hermes-chat--submit-content content))))
       (when sent-p
-	(hermes-chat--record-input-history content))))))
+        (hermes-chat--record-input-history content))))))
 
 ;;; Attachments view
 
@@ -4163,6 +4163,9 @@ into `hermes-chat-mode', so each activation owns exactly one hint."
   "C-j" #'hermes-chat-newline
   "S-<return>" #'hermes-chat-newline
   "TAB" #'hermes-chat-tab
+  ;; A slash opens the command menu only while the composer is empty;
+  ;; otherwise it stays the character the user typed.
+  "/" (hermes-chat--transcript-key #'hermes-chat-show-commands t)
   "r" '(menu-item "Quote region" hermes-chat-quote-region
          :filter (lambda (command)
                    (if (hermes-chat--point-in-input-p)
@@ -4196,7 +4199,6 @@ into `hermes-chat-mode', so each activation owns exactly one hint."
   "C-c C-d" #'hermes-chat-cancel-prompt
   "C-c C-o" #'hermes-chat-actions-map-popup
   "C-c C-p" #'hermes-command-palette
-  "C-c C-/" #'hermes-chat-show-commands
   "C-c C-l" #'hermes-chat-view-attachments
   "C-c C-g" #'hermes-session-control
   "C-c C-n" #'hermes-chat

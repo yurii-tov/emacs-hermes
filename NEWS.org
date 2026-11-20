@@ -34,6 +34,16 @@ New features and fixes:
   fixing =409 client_upgrade_required= errors.
 - =/new= in an ordinary chat keeps that chat's profile and backend
   instead of opening under the dashboard default profile.
+- =hermes-chat-show-commands= (also =/commands=, and a slash typed into
+  an empty composer) reads the command in the minibuffer with
+  =completing-read=, annotating each candidate with its description and
+  offering each subcommand as =/COMMAND SUB=.  The choice goes to the
+  chat's composer; a draft is never edited and the command goes to the
+  kill ring instead, and the fetched catalog refreshes the =/=
+  completion cache.  A slash after any composer text, or outside the
+  composer, still inserts literally, and =C-c C-/= is unbound.  The
+  =*Hermes Commands*= listing now appears only for a catalog with no
+  commands at all, and a catalog warning is reported in the echo area.
 - The chat header's work count follows the Hermes TUI: =🤖 N= counts
   running and queued workers and =⚙ M= running background processes, with
   no trailing =?=.  Each chat keeps the last successful roster read; hiding
