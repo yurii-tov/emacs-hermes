@@ -258,7 +258,7 @@
 
             meta = with lib; {
               description = "Emacs frontend for Hermes Agent";
-              homepage = "https://git.thanosapollo.org/emacs-hermes";
+              homepage = "https://github.com/yurii-tov/emacs-hermes";
               license = licenses.gpl3Plus;
               platforms = emacs.meta.platforms;
             };
