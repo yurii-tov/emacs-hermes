@@ -1955,7 +1955,7 @@ Run BODY from a buffer visiting ROOT, then kill the chats and the root."
   "C-c C-c interrupts a running turn and only reports when idle."
   (should (eq (keymap-lookup hermes-chat-mode-map "C-c C-c")
               #'hermes-chat-interrupt-turn))
-  (should (eq (keymap-lookup hermes-chat-mode-map "C-c C-k")
+  (should (eq (keymap-lookup hermes-chat-mode-map "C-c C-m")
               #'hermes-chat-interrupt-and-send))
   (hermes-test-with-chat-buffer
     (save-window-excursion
@@ -1976,6 +1976,26 @@ Run BODY from a buffer visiting ROOT, then kill the chats and the root."
           (setq busy t)
           (execute-kbd-macro (kbd "C-c C-c"))
           (should (= interrupts 1)))))))
+
+(ert-deftest hermes-chat-c-c-k-clears-the-transcript ()
+  "C-c C-k clears this chat's transcript once the user confirms."
+  (should (eq (keymap-lookup hermes-chat-mode-map "C-c C-k")
+              #'hermes-chat-clear))
+  (should (eq (keymap-lookup hermes-chat-mode-map "C-c C-m")
+              #'hermes-chat-interrupt-and-send))
+  (hermes-test-with-chat-buffer
+    (save-window-excursion
+      (switch-to-buffer (current-buffer))
+      (should (eq (key-binding (kbd "C-c C-k")) #'hermes-chat-clear))
+      (hermes-test--insert-user-turns "old question")
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) nil)))
+        (execute-kbd-macro (kbd "C-c C-k")))
+      (should (string-match-p "old question" (buffer-string)))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+        (execute-kbd-macro (kbd "C-c C-k")))
+      (let ((text (buffer-string)))
+        (should-not (string-match-p "old question" text))
+        (should (string-match-p "Session cleared" text))))))
 
 (defun hermes-test--insert-user-turns (&rest turns)
   "Insert submitted user TURNS, each followed by an assistant reply."

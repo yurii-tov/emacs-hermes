@@ -81,8 +81,8 @@ used first, annotated with session title, state and any divergent cwd.
   =M-x hermes-chat-enable-backend-reasoning= turns it on in that
   profile's saved config, for all of its sessions, after confirmation.
 - =C-c C-c= interrupts the running turn, as in =shell-mode=; when nothing
-  is running it only says so.  =C-c C-k= still interrupts and sends the
-  draft.
+  is running it only says so.  =C-c C-m= interrupts and sends the draft,
+  and =C-c C-k= clears the transcript after confirmation.
 - The menu's Aside group offers the side question (=y=, =/btw=), a
   background task (=G=, =/bg=) and Stop processes (=!=, =/stop=).  Session
   (=S=) holds New, Rename and List sessions plus a Fork group: Branch

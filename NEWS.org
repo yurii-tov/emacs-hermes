@@ -18,6 +18,8 @@ Incompatible changes:
   views moved to the mode line.
 - In the Workers view =RET= now opens the row's details; the published
   worker log moved to =L=.
+- =C-c C-k= in a chat buffer now clears the transcript; interrupt-and-send
+  moved to =C-c C-m= and stays on =k= inside the actions popup.
 
 New features and fixes:
 
@@ -70,7 +72,8 @@ New features and fixes:
   read-only protection rescans only changed text, and echo detection no
   longer renormalizes the whole reply on every chunk.
 - =C-c C-c= in a chat interrupts the running turn (=hermes-chat-interrupt-turn=);
-  when idle it only reports that nothing is running.  =C-c C-k= is unchanged.
+  when idle it only reports that nothing is running.  =C-c C-m= interrupts
+  and sends the draft.
 - Chat actions menu (=C-c C-o=): Work is now Activity (=B=) and Workspace is
   now Directory (=w=), so neither reads like Workers (=W=).  The Session menu
   splits into Session (New, Rename, List sessions) and Fork (Branch =b=,

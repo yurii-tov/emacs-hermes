@@ -629,7 +629,7 @@ of its own."
 (defun hermes-chat--busy-message ()
   "Return the user-facing busy/backpressure message."
   (concat "A Hermes reply is still pending; use C-c C-i to interrupt, "
-          "C-c C-q to queue, C-c C-s to steer, C-c C-k to "
+          "C-c C-q to queue, C-c C-s to steer, C-c C-m to "
           "interrupt+send, "
           (and (hermes-chat--pending-prompt-p)
                "C-c C-a to answer the prompt, C-c C-d to cancel it, ")
@@ -4192,7 +4192,8 @@ into `hermes-chat-mode', so each activation owns exactly one hint."
   "M-n" #'hermes-chat-input-history-next
   "C-c C-c" #'hermes-chat-interrupt-turn
   "C-c C-i" #'hermes-chat-interrupt
-  "C-c C-k" #'hermes-chat-interrupt-and-send
+  "C-c C-m" #'hermes-chat-interrupt-and-send
+  "C-c C-k" #'hermes-chat-clear
   "C-c C-q" #'hermes-chat-queue-message
   "C-c C-s" #'hermes-chat-steer-message
   "C-c C-a" #'hermes-chat-respond-to-prompt
