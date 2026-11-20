@@ -1,5 +1,9 @@
 #+title: emacs-hermes
 
+================================================================================
+CLONED FROM https://git.thanosapollo.org/emacs-hermes, README ISN'T UP TO DATE
+================================================================================
+
 [[https://elpa.nongnu.org/nongnu/hermes.svg]]
 
 An Emacs front-end for Hermes Agent, driven over the dashboard/TUI gateway.
