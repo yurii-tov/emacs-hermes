@@ -27,6 +27,8 @@ An Emacs front-end for Hermes Agent, driven over the dashboard/TUI gateway.
 Hermes Agent with dashboard/TUI gateway support is required.
   - See the [[https://hermes-agent.nousresearch.com/docs/getting-started/quickstart][Hermes Agent quickstart]] for installation and initial setup.
 
+TODO - not in any package repo yet
+
 * Usage
 
 =M-x hermes= opens the dashboard.  =M-x hermes-project-chat= switches to a
