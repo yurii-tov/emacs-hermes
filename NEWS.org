@@ -21,6 +21,14 @@ Incompatible changes:
 
 New features and fixes:
 
+- The dashboard binds =k= to kill the selected chat's buffer and =TAB= /
+  =S-TAB= to step through the cards, matching =n= and =p=.  Killing a
+  transcript never asks about the generated buffer; it only confirms when
+  the composer holds unsent input.  Each chat card names =k kill= on its
+  key hint line.
+- Opening the dashboard with =M-x hermes= no longer pops up the keybinding
+  help dialog over the buffer; press =?= or =h= for the keymap popup when
+  you want it.
 - Session browser delete, archive/unarchive, rename and pin/unpin send the
   mutation identity and revision required by current Hermes backends,
   fixing =409 client_upgrade_required= errors.

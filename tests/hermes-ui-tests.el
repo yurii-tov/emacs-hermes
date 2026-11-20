@@ -159,7 +159,7 @@
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
-(ert-deftest hermes-dashboard-opens-special-mode-buffer-and-popup ()
+(ert-deftest hermes-dashboard-opens-special-mode-buffer-without-popup ()
   (let (shown-map)
     (cl-letf (((symbol-function 'keymap-popup)
                (lambda (keymap) (setq shown-map keymap))))
@@ -167,7 +167,9 @@
           (progn
             (hermes)
             (should (eq major-mode 'hermes-dashboard-mode))
-            (should (eq shown-map hermes-dashboard-mode-map))
+            (should-not shown-map)
+            (should (eq (keymap-lookup hermes-dashboard-mode-map "?")
+                        #'hermes-dashboard-popup))
             (should hermes-dashboard--ewoc)
             (let ((text (buffer-string)))
               (should (string-match-p "Hermes" text))
@@ -191,6 +193,13 @@
   (should (eq (keymap-lookup hermes-dashboard-mode-map "g") #'hermes-dashboard-refresh))
   (should (eq (keymap-lookup hermes-dashboard-mode-map "n") #'hermes-dashboard-next))
   (should (eq (keymap-lookup hermes-dashboard-mode-map "p") #'hermes-dashboard-previous))
+  (should (eq (keymap-lookup hermes-dashboard-mode-map "TAB") #'hermes-dashboard-next))
+  (should (eq (keymap-lookup hermes-dashboard-mode-map "S-TAB")
+              #'hermes-dashboard-previous))
+  (should (eq (keymap-lookup hermes-dashboard-mode-map "<backtab>")
+              #'hermes-dashboard-previous))
+  (should (eq (keymap-lookup hermes-dashboard-mode-map "k")
+              #'hermes-dashboard-kill-chat))
   (should (eq (keymap-lookup hermes-dashboard-mode-map "RET") #'hermes-dashboard-open))
   (should (eq (keymap-lookup hermes-dashboard-mode-map "i") #'hermes-dashboard-interrupt))
   (should (eq (keymap-lookup hermes-dashboard-mode-map "s") #'hermes-dashboard-steer))
@@ -388,7 +397,83 @@
    (search-forward "Chat")
    (should-error (hermes-dashboard-interrupt) :type 'user-error)
    (should-error (hermes-dashboard-steer) :type 'user-error)
-   (should-error (hermes-dashboard-respond) :type 'user-error)))
+   (should-error (hermes-dashboard-respond) :type 'user-error)
+   (should-error (hermes-dashboard-kill-chat) :type 'user-error)))
+
+(ert-deftest hermes-dashboard-kill-chat-kills-the-selected-chat-buffer ()
+  "`k' kills the chat card's buffer and drops the card on the next render."
+  (let (chat-buffer chat-name)
+    (hermes-test-with-chat-buffer
+     (setq chat-buffer (current-buffer)
+           chat-name (buffer-name))
+     (save-window-excursion
+       (hermes-test-with-dashboard-buffer
+        (switch-to-buffer (current-buffer))
+        (let ((hermes-dashboard-stale-refresh-interval nil))
+          (search-forward chat-name)
+          (execute-kbd-macro (kbd "k"))
+          (should-not (buffer-live-p chat-buffer))
+          (should-not (get-buffer chat-name))
+          (hermes-dashboard-refresh)
+          (should-not (string-match-p (regexp-quote chat-name)
+                                      (buffer-string)))))))))
+
+(ert-deftest hermes-dashboard-kill-chat-hints-the-key-on-the-card ()
+  "The card itself names `k' next to the other selected-chat keys."
+  (let (chat-name)
+    (hermes-test-with-chat-buffer
+     (setq chat-name (buffer-name))
+     (hermes-test-with-dashboard-buffer
+      (let ((case-fold-search nil))
+        (should (string-match-p
+                 "RET open +i interrupt +s steer +a respond +k kill"
+                 (buffer-string)))
+        (goto-char (point-min))
+        (search-forward chat-name)
+        (should (string-match-p
+                 "RET open +i interrupt +s steer +a respond +k kill"
+                 (buffer-substring (line-beginning-position)
+                                   (progn (forward-line 3)
+                                          (line-end-position))))))))))
+
+
+(ert-deftest hermes-dashboard-kill-chat-guards-unsent-input-only ()
+  "A generated transcript never prompts; an unsent draft does."
+  (let (chat-buffer chat-name answer)
+    (hermes-test-with-chat-buffer
+     (setq chat-buffer (current-buffer)
+           chat-name (buffer-name))
+     (goto-char (point-max))
+     (insert "draft text")
+     (hermes-test-with-dashboard-buffer
+      (search-forward chat-name)
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (setq answer 'asked) nil)))
+        (should-error (hermes-dashboard-kill-chat) :type 'user-error))
+      (should (eq answer 'asked))
+      (should (buffer-live-p chat-buffer))
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+        (hermes-dashboard-kill-chat))
+      (should-not (buffer-live-p chat-buffer))))))
+
+(ert-deftest hermes-dashboard-tab-keys-navigate-the-card-list ()
+  "TAB and shift-TAB reach every card in display order and back."
+  (save-window-excursion
+    (hermes-test-with-dashboard-buffer
+     (switch-to-buffer (current-buffer))
+     (let* ((hermes-dashboard-stale-refresh-interval nil)
+            (ewoc hermes-dashboard--ewoc)
+            (first (ewoc-nth ewoc 0))
+            (second (ewoc-nth ewoc 1)))
+       (should second)
+       (goto-char (ewoc-location first))
+       (execute-kbd-macro (kbd "TAB"))
+       (should (eq (ewoc-locate ewoc) second))
+       (execute-kbd-macro (kbd "<backtab>"))
+       (should (eq (ewoc-locate ewoc) first))
+       (execute-kbd-macro (kbd "TAB"))
+       (execute-kbd-macro (kbd "S-TAB"))
+       (should (eq (ewoc-locate ewoc) first))))))
 
 (ert-deftest hermes-dashboard-status-helpers-classify-parity-states ()
   (dolist (case '(("in_progress" "Running" hermes-dashboard-status-running)
